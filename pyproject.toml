@@ -6,6 +6,10 @@ authors = ["yujiading <yujia.ding@cgu.edu>"]
 
 [tool.poetry.dependencies]
 python = "^3.7"
+tqdm = "^4.62.2"
+scikit-learn = "^0.24.2"
+generalized-elastic-net = "^1.0.1"
+matplotlib = "^3.4.3"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
