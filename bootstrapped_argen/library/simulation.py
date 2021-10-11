@@ -52,7 +52,7 @@ class Simulation:
     def response(X, w, eps):
         return X.dot(w) + eps
 
-    def check_consisitency(self, Q, w):
+    def is_consistent(self, Q, w):
         Q_JJ = Q[:self.nonzero_index, :self.nonzero_index]
         Q_JcJ = Q[self.nonzero_index:, :self.nonzero_index]
         w_J = w[:self.nonzero_index]
@@ -71,5 +71,5 @@ class Simulation:
         w = self.weights
         eps = self.noise(X=X, w=w)
         y = self.response(X=X, w=w, eps=eps)
-        is_consistent = self.check_consisitency(Q=Q, w=w)
+        is_consistent = self.is_consistent(Q=Q, w=w)
         return X, y, w, eps, is_consistent

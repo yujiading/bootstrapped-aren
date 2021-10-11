@@ -17,7 +17,7 @@ def y(X):
 
 
 def test_bootstrapped_regressor_ls(X, y):
-    reg = BootstrappedRegressor(regressor=LinearRegression(), bootstrap_replicates=100)
+    reg = BootstrappedRegressor(bootstrapped_feature_select_regressor=LinearRegression(), bootstrap_replicates=100)
     reg.fit(X, y)
     print(reg.intercept_, reg.coef_, reg.J)
 
@@ -31,6 +31,6 @@ def test_bootstrapped_regressor_argen(X, y):
     lowbo = -1e5 * np.ones(K)
     upbo = np.inf * np.ones(K)
     argen = GeneralizedElasticNet(lam_1=lam_1, lam_2=lam_2, lowbo=lowbo, upbo=upbo, wvec=wvec, sigma=sigma)
-    reg = BootstrappedRegressor(regressor=argen, bootstrap_replicates=100)
+    reg = BootstrappedRegressor(bootstrapped_feature_select_regressor=argen, bootstrap_replicates=100)
     reg.fit(X, y)
     print(reg.intercept_, reg.coef_, reg.J)
