@@ -7,14 +7,21 @@ import yfinance as yf
 from generalized_elastic_net import GeneralizedElasticNet
 from sklearn import linear_model
 from tqdm import tqdm
+import pickle
 
 from bootstrapped_argen.library.bootstrapped_regressor import BootstrappedRegressor
 
 
 class DriverIndexTrackSp500Aren:
-    def __init__(self, bootstrap_replicates, n_lambdas: int, n_alphas: int, start_date='2021-09-14',
-                 end_date='2021-09-16', train_size=0.7, val_size=0.2, test_size=0.1, lower_bound=-1e5,
-                 upper_bound=np.inf):
+    def __init__(self,
+                 bootstrap_replicates,
+                 n_lambdas: int,
+                 n_alphas: int,
+                 start_date='2021-09-14',
+                 end_date='2021-09-16',
+                 train_size=0.7,
+                 val_size=0.2,
+                 test_size=0.1):
         """
         bootstrap_replicates: number of bootstrap replications, if None, do not apply bootstrapping
 
@@ -30,8 +37,6 @@ class DriverIndexTrackSp500Aren:
         self.train_size = train_size
         self.test_size = test_size
         self.val_size = val_size
-        self.lower_bound = lower_bound
-        self.upper_bound = upper_bound
         self.n_samples = None
         self.n_features = None
         self.X = None
@@ -40,6 +45,7 @@ class DriverIndexTrackSp500Aren:
         self.val_mse = None
         self.val_lam = None
         self.val_alpha = None
+        self.bootstrapped_reg_dict = None
         self.get_data()
 
     def get_data(self):
@@ -88,60 +94,24 @@ class DriverIndexTrackSp500Aren:
 
     @property
     def get_lam_list(self):
-        # start_power = -1
-        # stop_power = 5
-        # if self.n_lambdas <= stop_power + 2:
-        #     lst = np.linspace(start=start_power, stop=stop_power, num=self.n_lambdas, dtype=int)
-        # else:
-        #     lst = np.arange(-1, self.n_lambdas - 1)
-        # return math.e ** lst
-        return [400000]
+        start_power = 1
+        stop_power = 15
+        if self.n_lambdas <= stop_power + 2:
+            lst = np.linspace(start=start_power, stop=stop_power, num=self.n_lambdas, dtype=int)
+        else:
+            lst = np.arange(-1, self.n_lambdas - 1)
+        return math.e ** lst
 
-    # total 298 10000 297, 50000  206, 70000, 177, 90000, 155, 110000 141, 200000 88, 400000 45
+    # total 298, 10000 297, 50000  206, 70000, 177, 90000, 155, 110000 141, 200000 88, 400000 45, 4000000 6
 
     @property
     def get_alpha_list(self):
-        # return np.linspace(start=0 + 1 / self.n_alphas, stop=1, num=self.n_alphas, dtype=float)
-        return [1]
-
-    def fit(self, X_train, y_train, X_val, y_val):
-        alpha_list = self.get_alpha_list
-        lam_list = self.get_lam_list
-        val_mse = np.inf
-        val_reg = None
-        val_lam = None
-        val_alpha = None
-        for alpha in tqdm(alpha_list):
-            for lam in lam_list:
-                elastic_net = self.get_reg(lam_1=alpha * lam, lam_2=lam * 0.5 * (1 - alpha), lower_bound=-1e5,
-                                           upper_bound=np.inf, n_features=self.n_features)
-                reg = BootstrappedRegressor(bootstrapped_feature_select_regressor=elastic_net,
-                                            bootstrap_replicates=self.bootstrap_replicates,
-                                            argen_fit_intercept=False)
-
-                reg.bootstrapped_feature_select(X_train, y_train)
-                arls = self.get_reg(lam_1=0, lam_2=0, lower_bound=self.lower_bound,
-                                    upper_bound=self.upper_bound, n_features=len(reg.J))
-                reg.fit(X_train, y_train, regressor=arls, fit_intercept=False)
-                mse = reg.score(X=X_val, y=y_val)
-                # portfolio_return = self.get_portfolio_return(J=reg.J, coef_=reg.coef_, X_test=X_val)
-                # mse = self.get_daily_tracking_error(portfolio_return=portfolio_return,
-                #                                     index_return=y_val)
-                if mse < val_mse:
-                    val_mse = mse
-                    val_reg = reg
-                    val_lam = lam
-                    val_alpha = alpha
-        self.val_reg = val_reg
-        self.val_mse = val_mse
-        self.val_lam = val_lam
-        self.val_alpha = val_alpha
-        return self
+        return np.linspace(start=0 + 1 / self.n_alphas, stop=1, num=self.n_alphas, dtype=float)
 
     @staticmethod
     def get_portfolio_return(J, coef_, X_test):
         X_test = X_test.iloc[:, J]
-        coef_ = coef_ / sum(coef_)
+        # coef_ = coef_ / sum(coef_)
         portfolio_return = np.matmul(X_test, coef_)
         return portfolio_return
 
@@ -173,10 +143,67 @@ class DriverIndexTrackSp500Aren:
             index_return), "two vectors need to be the same length"
         return np.std(np.abs(portfolio_return - index_return))
 
+    def bootstrapped_feature_select_hyperparameters(self, X_train, y_train):
+        data_dir_path = pathlib.Path(__file__).parent / '../data'
+        filename = data_dir_path / f'bodict_borepli{self.bootstrap_replicates}_{self.n_lambdas}lams_{self.n_alphas}alphas\
+        _{self.start_date}_{self.end_date}_train{self.train_size}_val{self.val_size}_test{self.test_size}.pickle'
+        file_path = pathlib.Path(filename)
+        if not file_path.exists():
+            bootstrapped_reg_dict = {}
+            alpha_list = self.get_alpha_list
+            lam_list = self.get_lam_list
+            for alpha in tqdm(alpha_list):
+                for lam in tqdm(lam_list):
+                    elastic_net = self.get_reg(lam_1=alpha * lam, lam_2=lam * 0.5 * (1 - alpha), lower_bound=-1e5,
+                                               upper_bound=np.inf, n_features=self.n_features)
+                    reg = BootstrappedRegressor(bootstrapped_feature_select_regressor=elastic_net,
+                                                bootstrap_replicates=self.bootstrap_replicates,
+                                                argen_fit_intercept=False)
+                    reg.bootstrapped_feature_select(X_train, y_train)
+                    bootstrapped_reg_dict[(alpha, lam)] = reg
+            self.bootstrapped_reg_dict = bootstrapped_reg_dict
+            with open(filename, 'wb') as handle:
+                pickle.dump(bootstrapped_reg_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        else:
+            with open(filename, 'rb') as handle:
+                self.bootstrapped_reg_dict = pickle.load(handle)
+        return self
+
+    def bootstrapped_feature_select_best_hyperparameter(self, X_train, y_train, X_val, y_val):
+        if self.bootstrapped_reg_dict is None:
+            raise ValueError('Need to run bootstrapped_feature_select_hyperparameters')
+        alpha_list = self.get_alpha_list
+        lam_list = self.get_lam_list
+        val_mse = np.inf
+        val_reg = None
+        val_lam = None
+        val_alpha = None
+        for alpha in tqdm(alpha_list):
+            for lam in tqdm(lam_list):
+                reg = self.bootstrapped_reg_dict[(alpha, lam)]
+                arls = self.get_reg(lam_1=0, lam_2=0, lower_bound=0,
+                                    upper_bound=1 / len(reg.J), n_features=len(reg.J))
+                reg.fit(X_train, y_train, regressor=arls, fit_intercept=False)
+                # mse = reg.score(X=X_val, y=y_val)
+                portfolio_return = self.get_portfolio_return(J=reg.J, coef_=reg.coef_, X_test=X_val)
+                mse = self.get_daily_tracking_error(portfolio_return=portfolio_return,
+                                                    index_return=y_val)
+                if mse < val_mse:
+                    val_mse = mse
+                    val_reg = reg
+                    val_lam = lam
+                    val_alpha = alpha
+        self.val_reg = val_reg
+        self.val_mse = val_mse
+        self.val_lam = val_lam
+        self.val_alpha = val_alpha
+        return self
+
     @property
     def run(self):
         X_train, y_train, X_val, y_val, X_test, y_test = self.train_test_val_split
-        self.fit(X_train, y_train, X_val, y_val)
+        self.bootstrapped_feature_select_hyperparameters(X_train, y_train)
+        self.bootstrapped_feature_select_best_hyperparameter(X_train, y_train, X_val, y_val)
         mse = self.val_reg.score(X=X_test, y=y_test)
         portfolio_return = self.get_portfolio_return(J=self.val_reg.J,
                                                      coef_=self.val_reg.coef_, X_test=X_test)
@@ -206,11 +233,3 @@ class DriverIndexTrackSp500Lasso(DriverIndexTrackSp500Aren):
     def get_reg(self, lam_1, lam_2, lower_bound, upper_bound):
         lasso = linear_model.Lasso(alpha=lam_1, fit_intercept=False)
         return lasso
-
-    @property
-    def get_lam_list(self):
-        if self.n_lambdas <= 7:
-            lst = np.linspace(start=-1, stop=5, num=self.n_lambdas, dtype=int)
-        else:
-            lst = np.arange(-1, self.n_lambdas - 1)
-        return math.e ** lst
