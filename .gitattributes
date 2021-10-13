@@ -1,0 +1,2 @@
+data/bodict_borepli200_15lams_10alphas_2020-09-01_2021-09-01_train0.7_val0.2_test0.1.pickle filter=lfs diff=lfs merge=lfs -text
+data/bodict_borepliNone_15lams_10alphas_2020-09-01_2021-09-01_train0.7_val0.2_test0.1.pickle filter=lfs diff=lfs merge=lfs -text

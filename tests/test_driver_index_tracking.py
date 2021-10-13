@@ -2,9 +2,9 @@ from bootstrapped_argen.driver_index_tracking import DriverIndexTrackSp500Aren, 
 
 
 def test_driver_index_track_sp500_aren():
-    driver = DriverIndexTrackSp500Aren(bootstrap_replicates=2,
-                                       n_alphas=2,  # from 0 to 1
-                                       n_lambdas=2,  # from e^1 to e^15
+    driver = DriverIndexTrackSp500Aren(bootstrap_replicates=None,
+                                       n_alphas=10,  # from 0 to 1
+                                       n_lambdas=15,  # from e^1 to e^15
                                        start_date='2020-09-01',
                                        end_date='2021-09-01',
                                        train_size=0.7,

@@ -145,15 +145,14 @@ class DriverIndexTrackSp500Aren:
 
     def bootstrapped_feature_select_hyperparameters(self, X_train, y_train):
         data_dir_path = pathlib.Path(__file__).parent / '../data'
-        filename = data_dir_path / f'bodict_borepli{self.bootstrap_replicates}_{self.n_lambdas}lams_{self.n_alphas}alphas\
-        _{self.start_date}_{self.end_date}_train{self.train_size}_val{self.val_size}_test{self.test_size}.pickle'
+        filename = data_dir_path / f'bodict_borepli{self.bootstrap_replicates}_{self.n_lambdas}lams_{self.n_alphas}alphas_{self.start_date}_{self.end_date}_train{self.train_size}_val{self.val_size}_test{self.test_size}.pickle'
         file_path = pathlib.Path(filename)
         if not file_path.exists():
             bootstrapped_reg_dict = {}
             alpha_list = self.get_alpha_list
             lam_list = self.get_lam_list
-            for alpha in tqdm(alpha_list):
-                for lam in tqdm(lam_list):
+            for alpha in tqdm(alpha_list, total=len(alpha_list)):
+                for lam in tqdm(lam_list, total=len(lam_list)):
                     elastic_net = self.get_reg(lam_1=alpha * lam, lam_2=lam * 0.5 * (1 - alpha), lower_bound=-1e5,
                                                upper_bound=np.inf, n_features=self.n_features)
                     reg = BootstrappedRegressor(bootstrapped_feature_select_regressor=elastic_net,
@@ -178,16 +177,16 @@ class DriverIndexTrackSp500Aren:
         val_reg = None
         val_lam = None
         val_alpha = None
-        for alpha in tqdm(alpha_list):
-            for lam in tqdm(lam_list):
+        for alpha in alpha_list:
+            for lam in lam_list:
                 reg = self.bootstrapped_reg_dict[(alpha, lam)]
                 arls = self.get_reg(lam_1=0, lam_2=0, lower_bound=0,
-                                    upper_bound=1 / len(reg.J), n_features=len(reg.J))
+                                    upper_bound=np.inf, n_features=len(reg.J))
                 reg.fit(X_train, y_train, regressor=arls, fit_intercept=False)
-                # mse = reg.score(X=X_val, y=y_val)
-                portfolio_return = self.get_portfolio_return(J=reg.J, coef_=reg.coef_, X_test=X_val)
-                mse = self.get_daily_tracking_error(portfolio_return=portfolio_return,
-                                                    index_return=y_val)
+                mse = reg.score(X=X_val, y=y_val)
+                # portfolio_return = self.get_portfolio_return(J=reg.J, coef_=reg.coef_, X_test=X_val)
+                # mse = self.get_daily_tracking_error(portfolio_return=portfolio_return,
+                #                                     index_return=y_val)
                 if mse < val_mse:
                     val_mse = mse
                     val_reg = reg
@@ -205,6 +204,7 @@ class DriverIndexTrackSp500Aren:
         self.bootstrapped_feature_select_hyperparameters(X_train, y_train)
         self.bootstrapped_feature_select_best_hyperparameter(X_train, y_train, X_val, y_val)
         mse = self.val_reg.score(X=X_test, y=y_test)
+        print(len(self.val_reg.J))
         portfolio_return = self.get_portfolio_return(J=self.val_reg.J,
                                                      coef_=self.val_reg.coef_, X_test=X_test)
         cumulative_return = self.get_cumulative_return(portfolio_return=portfolio_return)
