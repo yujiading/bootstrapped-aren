@@ -15,7 +15,7 @@ class BootstrappedRegressor:
                  bootstrap_replicates: int,
                  bootstrapped_feature_select_regressor,
                  argen_fit_intercept: bool = True,
-                 cpu: int = 3):
+                 cpu: int = 8):
         self.bootstrap_replicates = bootstrap_replicates
         self.bootstrapped_feature_select_regressor = bootstrapped_feature_select_regressor
         self.argen_fit_intercept = argen_fit_intercept
