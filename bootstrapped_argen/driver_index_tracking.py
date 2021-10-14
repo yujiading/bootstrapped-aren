@@ -92,14 +92,10 @@ class DriverIndexTrackSp500Aren:
         argen = GeneralizedElasticNet(lam_1=lam_1, lam_2=lam_2, lowbo=lowbo, upbo=upbo, wvec=wvec, sigma=sigma)
         return argen
 
-    @property
-    def get_lam_list(self):
-        start_power = 1
-        stop_power = 15
-        if self.n_lambdas <= stop_power + 2:
-            lst = np.linspace(start=start_power, stop=stop_power, num=self.n_lambdas, dtype=int)
-        else:
-            lst = np.arange(-1, self.n_lambdas - 1)
+    def get_lam_list(self, alpha):
+        start_power = 10
+        stop_power = 13 + int(math.log(alpha))
+        lst = np.linspace(start=start_power, stop=stop_power, num=stop_power - start_power + 1, dtype=int)
         return math.e ** lst
 
     # total 298, 10000 297, 50000  206, 70000, 177, 90000, 155, 110000 141, 200000 88, 400000 45, 4000000 6
@@ -137,21 +133,16 @@ class DriverIndexTrackSp500Aren:
         res = np.std(excess_return)
         return res
 
-    @staticmethod
-    def get_daily_tracking_error_volatility(portfolio_return, index_return):
-        assert len(portfolio_return) == len(
-            index_return), "two vectors need to be the same length"
-        return np.std(np.abs(portfolio_return - index_return))
-
     def bootstrapped_feature_select_hyperparameters(self, X_train, y_train):
         data_dir_path = pathlib.Path(__file__).parent / '../data'
         filename = data_dir_path / f'bodict_borepli{self.bootstrap_replicates}_{self.n_lambdas}lams_{self.n_alphas}alphas_{self.start_date}_{self.end_date}_train{self.train_size}_val{self.val_size}_test{self.test_size}.pickle'
         file_path = pathlib.Path(filename)
         if not file_path.exists():
+            print('file does not exist')
             bootstrapped_reg_dict = {}
             alpha_list = self.get_alpha_list
-            lam_list = self.get_lam_list
             for alpha in tqdm(alpha_list, total=len(alpha_list)):
+                lam_list = self.get_lam_list(alpha=alpha)
                 for lam in tqdm(lam_list, total=len(lam_list)):
                     elastic_net = self.get_reg(lam_1=alpha * lam, lam_2=lam * 0.5 * (1 - alpha), lower_bound=-1e5,
                                                upper_bound=np.inf, n_features=self.n_features)
@@ -164,6 +155,7 @@ class DriverIndexTrackSp500Aren:
             with open(filename, 'wb') as handle:
                 pickle.dump(bootstrapped_reg_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
         else:
+            print('file exists and load...')
             with open(filename, 'rb') as handle:
                 self.bootstrapped_reg_dict = pickle.load(handle)
         return self
@@ -172,21 +164,24 @@ class DriverIndexTrackSp500Aren:
         if self.bootstrapped_reg_dict is None:
             raise ValueError('Need to run bootstrapped_feature_select_hyperparameters')
         alpha_list = self.get_alpha_list
-        lam_list = self.get_lam_list
+        # lam_list = self.get_lam_list
         val_mse = np.inf
         val_reg = None
         val_lam = None
         val_alpha = None
         for alpha in alpha_list:
+            lam_list = self.get_lam_list(alpha)
             for lam in lam_list:
                 reg = self.bootstrapped_reg_dict[(alpha, lam)]
                 arls = self.get_reg(lam_1=0, lam_2=0, lower_bound=0,
                                     upper_bound=np.inf, n_features=len(reg.J))
                 reg.fit(X_train, y_train, regressor=arls, fit_intercept=False)
-                mse = reg.score(X=X_val, y=y_val)
-                # portfolio_return = self.get_portfolio_return(J=reg.J, coef_=reg.coef_, X_test=X_val)
-                # mse = self.get_daily_tracking_error(portfolio_return=portfolio_return,
-                #                                     index_return=y_val)
+                # mse = reg.score(X=X_val, y=y_val)
+
+                portfolio_return = self.get_portfolio_return(J=reg.J, coef_=reg.coef_, X_test=X_val)
+                mse = self.get_daily_tracking_error(portfolio_return=portfolio_return,
+                                                    index_return=y_val)
+                print(f"alpha={alpha}, lam={lam}, te={mse}, subset={len(reg.J)}")
                 if mse < val_mse:
                     val_mse = mse
                     val_reg = reg
@@ -211,9 +206,7 @@ class DriverIndexTrackSp500Aren:
         annual_average_return = self.get_annual_average_return(portfolio_return=portfolio_return)
         annual_volatility = self.get_annual_volatility(portfolio_return=portfolio_return)
         daily_tracking_error = self.get_daily_tracking_error(portfolio_return=portfolio_return, index_return=y_test)
-        daily_tracking_error_volatility = self.get_daily_tracking_error_volatility(portfolio_return=portfolio_return,
-                                                                                   index_return=y_test)
-        return mse, portfolio_return, cumulative_return, annual_average_return, annual_volatility, daily_tracking_error, daily_tracking_error_volatility
+        return mse, portfolio_return, cumulative_return, annual_average_return, annual_volatility, daily_tracking_error
 
 
 class DriverIndexTrackSp500Lasso(DriverIndexTrackSp500Aren):
@@ -230,6 +223,6 @@ class DriverIndexTrackSp500Lasso(DriverIndexTrackSp500Aren):
                          start_date=start_date, end_date=end_date, train_size=train_size, val_size=val_size,
                          test_size=test_size, lower_bound=None, upper_bound=None)
 
-    def get_reg(self, lam_1, lam_2, lower_bound, upper_bound):
+    def get_reg(self, lam_1, lam_2, lower_bound, upper_bound, n_features):
         lasso = linear_model.Lasso(alpha=lam_1, fit_intercept=False)
         return lasso
