@@ -11,14 +11,13 @@ def test_driver_index_track_sp500_aren():
                                        val_size=0.2,
                                        test_size=0.1)
     mse, portfolio_return, cumulative_return, annual_average_return, \
-    annual_volatility, daily_tracking_error, daily_tracking_error_volatility = driver.run
+    annual_volatility, daily_tracking_error = driver.run
     print(f"portfolio_return is {portfolio_return}")
     print(f"mse is {mse}")
     print(f"cumulative_return is {cumulative_return}")
     print(f"annual_average_return is {annual_average_return}")
     print(f"annual_volatility is {annual_volatility}")
     print(f"daily_tracking_error is {daily_tracking_error}")
-    print(f"daily_tracking_error_volatility is {daily_tracking_error_volatility}")
 
 
 def test_driver_index_track_sp500_lasso():
