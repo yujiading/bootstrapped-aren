@@ -94,8 +94,8 @@ class DriverIndexTrackSp500Aren:
 
     def get_lam_list(self, alpha):
         start_power = 10
-        stop_power = 13 + int(math.log(alpha))
-        lst = np.linspace(start=start_power, stop=stop_power, num=stop_power - start_power + 1, dtype=int)
+        stop_power = 13 - int(math.log(alpha))
+        lst = np.linspace(start=start_power, stop=stop_power, num=self.n_lambdas, dtype=float)
         return math.e ** lst
 
     # total 298, 10000 297, 50000  206, 70000, 177, 90000, 155, 110000 141, 200000 88, 400000 45, 4000000 6
