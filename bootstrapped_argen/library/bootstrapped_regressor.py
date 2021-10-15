@@ -8,6 +8,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
 from sklearn.utils import resample
 from tqdm import tqdm
+import copy
 
 
 class BootstrappedRegressor:
@@ -53,10 +54,11 @@ class BootstrappedRegressor:
         else:
             X_star = X
             y_star = y
-        if isinstance(self.bootstrapped_feature_select_regressor, GeneralizedElasticNet) and self.argen_fit_intercept:
+        bootstrapped_feature_select_regressor = copy.deepcopy(self.bootstrapped_feature_select_regressor)
+        if isinstance(bootstrapped_feature_select_regressor, GeneralizedElasticNet) and self.argen_fit_intercept:
             X_star = np.concatenate((np.ones((n, 1)), X_star), axis=1)
-        reg = self.bootstrapped_feature_select_regressor.fit(X_star, y_star)
-        if isinstance(self.bootstrapped_feature_select_regressor, GeneralizedElasticNet) and self.argen_fit_intercept:
+        reg = bootstrapped_feature_select_regressor.fit(X_star, y_star)
+        if isinstance(bootstrapped_feature_select_regressor, GeneralizedElasticNet) and self.argen_fit_intercept:
             w = reg.coef_[1:]
         else:
             w = reg.coef_
@@ -73,7 +75,7 @@ class BootstrappedRegressor:
                 with Pool(self.cpu) as p:
                     is_tqdm = False
                     if is_tqdm:
-                        J_lst = list(tqdm(p.map(partial(self.get_J,
+                        J_lst = list(tqdm(p.imap(partial(self.get_J,
                                                          X=X,
                                                          y=y,
                                                          is_bootstrap=True), bootstrap_iterate),
