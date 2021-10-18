@@ -78,13 +78,13 @@ class BootstrappedRegressor:
                         J_lst = list(tqdm(p.imap(partial(self.get_J,
                                                          X=X,
                                                          y=y,
-                                                         is_bootstrap=True), bootstrap_iterate),
+                                                         is_bootstrap=True), bootstrap_iterate, chunksize=2),
                                           total=len(bootstrap_iterate)))
                     else:
-                        J_lst = list(p.map(partial(self.get_J,
+                        J_lst = list(p.imap(partial(self.get_J,
                                                    X=X,
                                                    y=y,
-                                                   is_bootstrap=True), bootstrap_iterate))
+                                                   is_bootstrap=True), bootstrap_iterate, chunksize=2))
 
                 J = self._get_intersect_lists(J_lst)
             else:
