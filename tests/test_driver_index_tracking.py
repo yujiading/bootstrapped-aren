@@ -2,9 +2,9 @@ from bootstrapped_argen.driver_index_tracking import DriverIndexTrackSp500Aren, 
 
 
 def test_driver_index_track_sp500_aren():
-    driver = DriverIndexTrackSp500Aren(bootstrap_replicates=10,
-                                       n_alphas=10,  # from 0 to 1
-                                       n_lambdas=100,  # from e^10 to e^(13-int(ln(alpha))
+    driver = DriverIndexTrackSp500Aren(bootstrap_replicates=16,
+                                       n_alphas=4,  # from 0 to 1
+                                       n_lambdas=None,  # from e^10 to e^(13-int(ln(alpha)) # if None, around 15 points depending on alpha
                                        start_date='2020-09-01',
                                        end_date='2021-09-01',
                                        train_size=0.7,
@@ -20,6 +20,7 @@ def test_driver_index_track_sp500_aren():
     print(f"daily_tracking_error is {daily_tracking_error}")
 
     # bootstrap_replicates=10, n_alphas=10, n_lambdas=100,  9hr
+    # 150s per bootstrap_replicates=100
 
 
 def test_driver_index_track_sp500_lasso():

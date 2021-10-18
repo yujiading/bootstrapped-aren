@@ -1,5 +1,6 @@
 import math
 import pathlib
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -7,7 +8,6 @@ import yfinance as yf
 from generalized_elastic_net import GeneralizedElasticNet
 from sklearn import linear_model
 from tqdm import tqdm
-import pickle
 
 from bootstrapped_argen.library.bootstrapped_regressor import BootstrappedRegressor
 
@@ -15,8 +15,8 @@ from bootstrapped_argen.library.bootstrapped_regressor import BootstrappedRegres
 class DriverIndexTrackSp500Aren:
     def __init__(self,
                  bootstrap_replicates,
-                 n_lambdas: int,
                  n_alphas: int,
+                 n_lambdas: int = None,
                  start_date='2021-09-14',
                  end_date='2021-09-16',
                  train_size=0.7,
@@ -95,7 +95,11 @@ class DriverIndexTrackSp500Aren:
     def get_lam_list(self, alpha):
         start_power = 10
         stop_power = 13 - int(math.log(alpha))
-        lst = np.linspace(start=start_power, stop=stop_power, num=self.n_lambdas, dtype=float)
+        if self.n_lambdas is None:
+            n_lambdas = (stop_power - start_power) * 4 + 1
+        else:
+            n_lambdas = self.n_lambdas
+        lst = np.linspace(start=start_power, stop=stop_power, num=n_lambdas, dtype=float)
         return math.e ** lst
 
     # total 298, 10000 297, 50000  206, 70000, 177, 90000, 155, 110000 141, 200000 88, 400000 45, 4000000 6
@@ -177,11 +181,10 @@ class DriverIndexTrackSp500Aren:
                                     upper_bound=np.inf, n_features=len(reg.J))
                 reg.fit(X_train, y_train, regressor=arls, fit_intercept=False)
                 # mse = reg.score(X=X_val, y=y_val)
-
                 portfolio_return = self.get_portfolio_return(J=reg.J, coef_=reg.coef_, X_test=X_val)
                 mse = self.get_daily_tracking_error(portfolio_return=portfolio_return,
                                                     index_return=y_val)
-                print(f"alpha={alpha}, lam={lam}, te={mse}, subset={len(reg.J)}")
+                print(f"alpha={alpha}, lam=e^{math.log(lam)}, te={mse}, subset={len(reg.J)}")
                 if mse < val_mse:
                     val_mse = mse
                     val_reg = reg
@@ -221,7 +224,7 @@ class DriverIndexTrackSp500Lasso(DriverIndexTrackSp500Aren):
         """
         super().__init__(bootstrap_replicates=bootstrap_replicates, n_lambdas=n_lambdas, n_alphas=1,
                          start_date=start_date, end_date=end_date, train_size=train_size, val_size=val_size,
-                         test_size=test_size, lower_bound=None, upper_bound=None)
+                         test_size=test_size)
 
     def get_reg(self, lam_1, lam_2, lower_bound, upper_bound, n_features):
         lasso = linear_model.Lasso(alpha=lam_1, fit_intercept=False)
