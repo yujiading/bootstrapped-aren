@@ -1,15 +1,18 @@
 from bootstrapped_argen.driver_index_tracking import DriverIndexTrackSp500Aren, DriverIndexTrackSp500Lasso
-
+import numpy as np
 
 def test_driver_index_track_sp500_aren():
-    driver = DriverIndexTrackSp500Aren(bootstrap_replicates=16,
+    driver = DriverIndexTrackSp500Aren(bootstrap_replicates=128,
                                        n_alphas=4,  # from 0 to 1
                                        n_lambdas=None,  # from e^10 to e^(13-int(ln(alpha)) # if None, around 15 points depending on alpha
                                        start_date='2020-09-01',
                                        end_date='2021-09-01',
                                        train_size=0.7,
                                        val_size=0.2,
-                                       test_size=0.1)
+                                       test_size=0.1,
+                                       fit_low_bound=0,
+                                       fit_up_bound=np.inf,
+                                       max_feature_selected=50)
     mse, portfolio_return, cumulative_return, annual_average_return, \
     annual_volatility, daily_tracking_error = driver.run
     print(f"portfolio_return is {portfolio_return}")
