@@ -116,7 +116,7 @@ class BootstrappedRegressor:
                     self.intercept_ = 0
                     self.coef_ = reg_ls.coef_
             else:
-                reg_ls = regressor.bootstrapped_feature_select_hyperparameters(X_J, y)
+                reg_ls = regressor.fit(X_J, y)
                 self.intercept_ = reg_ls.intercept_
                 self.coef_ = reg_ls.coef_
         return self
