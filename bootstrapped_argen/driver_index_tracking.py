@@ -21,7 +21,10 @@ class DriverIndexTrackSp500Aren:
                  end_date='2021-09-16',
                  train_size=0.7,
                  val_size=0.2,
-                 test_size=0.1):
+                 test_size=0.1,
+                 fit_low_bound=0,
+                 fit_up_bound=np.inf,
+                 max_feature_selected=None):
         """
         bootstrap_replicates: number of bootstrap replications, if None, do not apply bootstrapping
 
@@ -37,6 +40,9 @@ class DriverIndexTrackSp500Aren:
         self.train_size = train_size
         self.test_size = test_size
         self.val_size = val_size
+        self.fit_low_bound = fit_low_bound
+        self.fit_up_bound = fit_up_bound
+        self.max_feature_selected = max_feature_selected
         self.n_samples = None
         self.n_features = None
         self.X = None
@@ -177,8 +183,11 @@ class DriverIndexTrackSp500Aren:
             lam_list = self.get_lam_list(alpha)
             for lam in lam_list:
                 reg = self.bootstrapped_reg_dict[(alpha, lam)]
-                arls = self.get_reg(lam_1=0, lam_2=0, lower_bound=0,
-                                    upper_bound=np.inf, n_features=len(reg.J))
+                if self.max_feature_selected is not None:
+                    if self.max_feature_selected <= len(reg.J):
+                        continue
+                arls = self.get_reg(lam_1=0, lam_2=0, lower_bound=self.fit_low_bound,
+                                    upper_bound=self.fit_up_bound, n_features=len(reg.J))
                 reg.fit(X_train, y_train, regressor=arls, fit_intercept=False)
                 # mse = reg.score(X=X_val, y=y_val)
                 portfolio_return = self.get_portfolio_return(J=reg.J, coef_=reg.coef_, X_test=X_val)
