@@ -93,13 +93,13 @@ class BootstrappedRegressor:
                         J_lst = list(tqdm(p.imap(partial(self.get_J,
                                                          X=X,
                                                          y=y,
-                                                         is_bootstrap=True), bootstrap_iterate, chunksize=2),
+                                                         is_bootstrap=True), bootstrap_iterate, chunksize=10),
                                           total=len(bootstrap_iterate)))
                     else:
                         J_lst = list(p.imap(partial(self.get_J,
                                                     X=X,
                                                     y=y,
-                                                    is_bootstrap=True), bootstrap_iterate, chunksize=2))
+                                                    is_bootstrap=True), bootstrap_iterate, chunksize=10))
 
             else:
                 J_lst = []

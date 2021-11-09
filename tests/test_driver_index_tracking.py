@@ -3,14 +3,14 @@ import numpy as np
 
 
 def test_driver_index_track_sp500_aren_run():
-    driver = DriverIndexTrackSp500Aren(bootstrap_replicates=20,
+    driver = DriverIndexTrackSp500Aren(bootstrap_replicates=256, # if None need also is_soft_J None
                                        fit_low_bound=0,
                                        fit_up_bound=np.inf,
                                        max_feature_selected=None,
                                        # please change only above
                                        # do not need to change below
-                                       n_alphas=1,  # from 0 to 1
-                                       n_lambdas=2,  # from 0.001*max_lam to max_lam
+                                       n_alphas=10,  # from 0 to 1
+                                       n_lambdas=100,  # from 0.001*max_lam to max_lam
                                        start_date='2020-09-01',
                                        end_date='2021-09-01',
                                        train_size=0.7,

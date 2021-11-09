@@ -201,7 +201,7 @@ class DriverIndexTrackSp500Aren:
         val_reg = None
         val_lam = None
         val_alpha = None
-        for alpha in alpha_list:
+        for alpha in tqdm(alpha_list):
             lam_list = self.get_lam_list(alpha)
             for lam in lam_list:
                 reg = self.bootstrapped_reg_dict[(alpha, lam)]
@@ -247,6 +247,7 @@ class DriverIndexTrackSp500Aren:
         X_train, y_train, X_val, y_val, X_test, y_test = self.train_test_val_split
         self.bootstrapped_feature_select_all_hyperparameters(X_train, y_train)
         self.bootstrapped_feature_select_best_hyperparameter(X_train, y_train, X_val, y_val, is_soft_J=is_soft_J)
+        print(f"min_coef={np.min(self.val_reg.coef_)}, max_coef={np.max(self.val_reg.coef_)}")
         mse = self.val_reg.score(X=X_test, y=y_test, is_soft_J=is_soft_J)
         if is_soft_J:
             J = self.val_reg.J_soft
