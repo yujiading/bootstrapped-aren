@@ -1,11 +1,9 @@
 from bootstrapped_argen.driver_index_tracking import DriverIndexTrackSp500Aren, DriverIndexTrackSp500Lasso
-import numpy as np
 
 
 def test_driver_index_track_sp500_aren_run():
-    driver = DriverIndexTrackSp500Aren(bootstrap_replicates=256, # if None need also is_soft_J None
-                                       fit_low_bound=0,
-                                       fit_up_bound=np.inf,
+    driver = DriverIndexTrackSp500Aren(bootstrap_replicates=256,  # if None need also is_soft_J None
+                                       percent_money_on_each_stock=0.1,  # is 100%, no limit on constraints
                                        max_feature_selected=None,
                                        # please change only above
                                        # do not need to change below
@@ -26,7 +24,7 @@ def test_driver_index_track_sp500_aren_run():
     print(f"daily_tracking_error is {daily_tracking_error}")
 
     is_soft_J = True
-    is_plot_price = True
+    is_plot_price = False
     size_J, mse, daily_tracking_error = driver.run(is_soft_J=is_soft_J, is_plot_price=is_plot_price)
     print(f"is soft J {is_soft_J}")
     print(f"size is {size_J}")

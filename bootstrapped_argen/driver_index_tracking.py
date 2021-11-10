@@ -1,7 +1,6 @@
 import pathlib
 import pickle
 
-import math
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -9,7 +8,7 @@ import yfinance as yf
 from generalized_elastic_net import GeneralizedElasticNet
 from sklearn import linear_model
 from tqdm import tqdm
-
+from typing import Union
 from bootstrapped_argen.library.bootstrapped_regressor import BootstrappedRegressor
 
 
@@ -18,8 +17,7 @@ class DriverIndexTrackSp500Aren:
                  bootstrap_replicates,
                  n_alphas: int,  # 0 to 1
                  n_lambdas: int,  # 0.001*max_lam to max_lam
-                 fit_low_bound=0,
-                 fit_up_bound=np.inf,
+                 percent_money_on_each_stock: float = 1,
                  max_feature_selected=None,
                  start_date='2021-09-14',
                  end_date='2021-09-16',
@@ -42,8 +40,7 @@ class DriverIndexTrackSp500Aren:
         self.train_size = train_size
         self.test_size = test_size
         self.val_size = val_size
-        self.fit_low_bound = fit_low_bound
-        self.fit_up_bound = fit_up_bound
+        self.percent_money_on_each_stock = percent_money_on_each_stock
         self.max_feature_selected = max_feature_selected
         self.eps = eps
         self.n_samples = None
@@ -94,13 +91,20 @@ class DriverIndexTrackSp500Aren:
         y_test = self.y.iloc[n_samples_train + n_samples_val:]
         return X_train, y_train, X_val, y_val, X_test, y_test
 
-    def get_reg(self, lam_1, lam_2, lower_bound, upper_bound, n_features):
+    def get_reg(self, lam_1, lam_2, lower_bound: Union[float, np.ndarray], upper_bound: Union[float, np.ndarray],
+                n_features):
         # k = self.n_features + 1
         k = n_features
         sigma = np.diag([1] * k)
         wvec = np.ones(k)
-        lowbo = lower_bound * np.ones(k)
-        upbo = upper_bound * np.ones(k)
+        if isinstance(lower_bound, (float, int)):
+            lowbo = lower_bound * np.ones(k)
+        else:
+            lowbo = lower_bound
+        if isinstance(upper_bound, (float, int)):
+            upbo = upper_bound * np.ones(k)
+        else:
+            upbo = upper_bound
         argen = GeneralizedElasticNet(lam_1=lam_1, lam_2=lam_2, lowbo=lowbo, upbo=upbo, wvec=wvec, sigma=sigma)
         return argen
 
@@ -176,21 +180,48 @@ class DriverIndexTrackSp500Aren:
                 self.bootstrapped_reg_dict = pickle.load(handle)
         return self
 
+    def get_s0_t0(self, J, coef_min, coef_max, X_train):
+        R_min = X_train.iloc[:, J].min().min()
+        R_max = X_train.iloc[:, J].max().max()
+        R_factor = (1 + R_min) / (1 + R_max)
+        factor = self.percent_money_on_each_stock * R_factor * (len(J) - 1) / (1 - self.percent_money_on_each_stock)
+        if factor < 1:
+            raise ValueError('cannot use current percent_money_on_each_stock, try a bigger one')
+        s1, t2 = coef_min, coef_max
+        t1 = factor * s1
+        s2 = t2 / factor
+        d1 = t1 - s1
+        d2 = t2 - s2
+        if d1 >= d2:
+            s0 = s1
+            t0 = t1
+        else:
+            s0 = s2
+            t0 = t2
+        return s0, t0
+
     def bootstrapped_feature_select_fit_one_hyperparameter(self, reg: BootstrappedRegressor, X_train, y_train, X_val,
                                                            y_val, is_soft_J):
         if is_soft_J:
             J = reg.J_soft
         else:
             J = reg.J
-        arls = self.get_reg(lam_1=0, lam_2=0, lower_bound=self.fit_low_bound,
-                            upper_bound=self.fit_up_bound, n_features=len(J))
+        arls = self.get_reg(lam_1=0, lam_2=0, lower_bound=0,
+                            upper_bound=np.inf, n_features=len(J))
         reg.fit(X_train, y_train, regressor=arls, fit_intercept=False, is_soft_J=is_soft_J)
+        if self.percent_money_on_each_stock < 1:
+            coef_max = np.max(reg.coef_)
+            coef_min = np.min(reg.coef_)
+            s0, t0 = self.get_s0_t0(J=J, coef_min=coef_min, coef_max=coef_max, X_train=X_train)
+            # print(s0, t0)
+            arls = self.get_reg(lam_1=0, lam_2=0, lower_bound=s0,
+                                upper_bound=t0, n_features=len(J))
+            reg.fit(X_train, y_train, regressor=arls, fit_intercept=False, is_soft_J=is_soft_J)
         # mse = reg.score(X=X_val, y=y_val)
         portfolio_return = self.get_portfolio_return(J=J, coef_=reg.coef_, X_test=X_val)
-        mse = self.get_daily_tracking_error(portfolio_return=portfolio_return,
-                                            index_return=y_val)
-
-        return mse
+        te = self.get_daily_tracking_error(portfolio_return=portfolio_return,
+                                           index_return=y_val)
+        return te
 
     def bootstrapped_feature_select_best_hyperparameter(self, X_train, y_train, X_val, y_val, is_soft_J):
         if self.bootstrapped_reg_dict is None:
@@ -209,6 +240,8 @@ class DriverIndexTrackSp500Aren:
                     J = reg.J_soft
                 else:
                     J = reg.J
+                if not J:  # is J is empty, skip it
+                    continue
                 if self.max_feature_selected is not None:
                     if self.max_feature_selected <= len(J):
                         continue
@@ -247,7 +280,7 @@ class DriverIndexTrackSp500Aren:
         X_train, y_train, X_val, y_val, X_test, y_test = self.train_test_val_split
         self.bootstrapped_feature_select_all_hyperparameters(X_train, y_train)
         self.bootstrapped_feature_select_best_hyperparameter(X_train, y_train, X_val, y_val, is_soft_J=is_soft_J)
-        print(f"min_coef={np.min(self.val_reg.coef_)}, max_coef={np.max(self.val_reg.coef_)}")
+        # print(f"min_coef={np.min(self.val_reg.coef_)}, max_coef={np.max(self.val_reg.coef_)}")
         mse = self.val_reg.score(X=X_test, y=y_test, is_soft_J=is_soft_J)
         if is_soft_J:
             J = self.val_reg.J_soft
