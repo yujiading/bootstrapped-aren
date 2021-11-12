@@ -2,8 +2,8 @@ from bootstrapped_argen.driver_index_tracking import DriverIndexTrackSp500Aren, 
 
 
 def test_driver_index_track_sp500_aren_run():
-    driver = DriverIndexTrackSp500Aren(bootstrap_replicates=256,  # if None need also is_soft_J None
-                                       percent_money_on_each_stock=0.1,  # is 100%, no limit on constraints
+    driver = DriverIndexTrackSp500Aren(bootstrap_replicates=128,  # if None need also is_soft_J None
+                                       percent_money_on_each_stock=0.3,  # is 100%, no limit on constraints
                                        max_feature_selected=None,
                                        # please change only above
                                        # do not need to change below
