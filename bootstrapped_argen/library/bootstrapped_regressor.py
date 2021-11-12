@@ -108,7 +108,7 @@ class BootstrappedRegressor:
                     J_lst.append(J_)
             self.J = self._get_intersect_lists(J_lst, percentage=1)
             if self.is_soft_J:
-                self.J_soft = self._get_intersect_lists(J_lst, percentage=0.9)
+                self.J_soft = self._get_intersect_lists(J_lst, percentage=0.8)
         return self
 
     def fit(self, X, y, is_soft_J, regressor=None, fit_intercept: bool = True):

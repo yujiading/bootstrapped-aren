@@ -10,7 +10,7 @@ from sklearn import linear_model
 from tqdm import tqdm
 from typing import Union
 from bootstrapped_argen.library.bootstrapped_regressor import BootstrappedRegressor
-
+from time import sleep
 
 class DriverIndexTrackSp500Aren:
     def __init__(self,
@@ -186,7 +186,7 @@ class DriverIndexTrackSp500Aren:
         R_factor = (1 + R_min) / (1 + R_max)
         factor = self.percent_money_on_each_stock * R_factor * (len(J) - 1) / (1 - self.percent_money_on_each_stock)
         if factor < 1:
-            raise ValueError('cannot use current percent_money_on_each_stock, try a bigger one')
+            raise ValueError(f'factor={factor},cannot use current percent_money_on_each_stock, try a bigger one')
         s1, t2 = coef_min, coef_max
         t1 = factor * s1
         s2 = t2 / factor
@@ -245,9 +245,12 @@ class DriverIndexTrackSp500Aren:
                 if self.max_feature_selected is not None:
                     if self.max_feature_selected <= len(J):
                         continue
-                mse = self.bootstrapped_feature_select_fit_one_hyperparameter(reg=reg, X_train=X_train, y_train=y_train,
+                try:
+                    mse = self.bootstrapped_feature_select_fit_one_hyperparameter(reg=reg, X_train=X_train, y_train=y_train,
                                                                               X_val=X_val, y_val=y_val,
                                                                               is_soft_J=is_soft_J)
+                except:
+                    continue
                 # print(f"alpha={alpha}, lam={lam}, te={mse}, subset={len(J)}")
                 if mse < val_mse:
                     val_mse = mse
