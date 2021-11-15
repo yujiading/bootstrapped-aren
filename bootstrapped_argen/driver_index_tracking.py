@@ -1,22 +1,23 @@
 import pathlib
 import pickle
+from typing import List, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import yfinance as yf
 from generalized_elastic_net import GeneralizedElasticNet
-from sklearn import linear_model
 from tqdm import tqdm
-from typing import Union
+
 from bootstrapped_argen.library.bootstrapped_regressor import BootstrappedRegressor
-from time import sleep
+
 
 class DriverIndexTrackSp500Aren:
     def __init__(self,
-                 bootstrap_replicates,
+                 bootstrap_replicates_lst: List,  # increaing list
                  n_alphas: int,  # 0 to 1
                  n_lambdas: int,  # 0.001*max_lam to max_lam
+                 soft_J_percentage_lst: List = None,  # None if no bootstrapping # decreasing list
                  percent_money_on_each_stock: float = 1,
                  max_feature_selected=None,
                  start_date='2021-09-14',
@@ -24,17 +25,19 @@ class DriverIndexTrackSp500Aren:
                  train_size=0.7,
                  val_size=0.2,
                  test_size=0.1,
-                 eps=1e-8):
+                 eps=1e-8,
+                 is_fit_intercept: bool = False):
         """
-        bootstrap_replicates: number of bootstrap replications, if None, do not apply bootstrapping
+        bootstrap_replicates_lst: list of bootstrap replicates, None in list means do not apply bootstrapping
 
         lambda * (alpha * ||w||_1 + 0.5 * (1-alpha) * ||w||_2^2)
 
         lambda = e^, 0<=alpha<=1
         """
-        self.bootstrap_replicates = bootstrap_replicates
+        self.bootstrap_replicates_lst = bootstrap_replicates_lst
         self.n_lambdas = n_lambdas
         self.n_alphas = n_alphas
+        self.soft_J_percentage_lst = soft_J_percentage_lst
         self.start_date = start_date
         self.end_date = end_date
         self.train_size = train_size
@@ -43,6 +46,7 @@ class DriverIndexTrackSp500Aren:
         self.percent_money_on_each_stock = percent_money_on_each_stock
         self.max_feature_selected = max_feature_selected
         self.eps = eps
+        self.is_fit_intercept = is_fit_intercept
         self.n_samples = None
         self.n_features = None
         self.X = None  # returns
@@ -93,8 +97,10 @@ class DriverIndexTrackSp500Aren:
 
     def get_reg(self, lam_1, lam_2, lower_bound: Union[float, np.ndarray], upper_bound: Union[float, np.ndarray],
                 n_features):
-        # k = self.n_features + 1
-        k = n_features
+        if self.is_fit_intercept:
+            k = n_features + 1
+        else:
+            k = n_features
         sigma = np.diag([1] * k)
         wvec = np.ones(k)
         if isinstance(lower_bound, (float, int)):
@@ -152,7 +158,7 @@ class DriverIndexTrackSp500Aren:
 
     def bootstrapped_feature_select_all_hyperparameters(self, X_train, y_train):
         data_dir_path = pathlib.Path(__file__).parent / '../data'
-        filename = data_dir_path / f'bodict_borepli{self.bootstrap_replicates}_{self.n_lambdas}lams_{self.n_alphas}alphas_{self.start_date}_{self.end_date}_train{self.train_size}_val{self.val_size}_test{self.test_size}.pickle'
+        filename = data_dir_path / f'intercept{self.is_fit_intercept}_borepli{self.bootstrap_replicates_lst}_{self.n_lambdas}lams_{self.n_alphas}alphas_{self.start_date}_{self.end_date}_train{self.train_size}_val{self.val_size}_test{self.test_size}.pickle'
         file_path = pathlib.Path(filename)
         if not file_path.exists():
             print('file does not exist')
@@ -164,11 +170,11 @@ class DriverIndexTrackSp500Aren:
                     elastic_net = self.get_reg(lam_1=alpha * lam, lam_2=lam * 0.5 * (1 - alpha), lower_bound=-self.eps,
                                                upper_bound=np.inf, n_features=self.n_features)
                     reg = BootstrappedRegressor(bootstrapped_feature_select_regressor=elastic_net,
-                                                bootstrap_replicates=self.bootstrap_replicates,
-                                                argen_fit_intercept=False,
+                                                bootstrap_replicates_lst=self.bootstrap_replicates_lst,
+                                                soft_J_percentage_lst=self.soft_J_percentage_lst,
+                                                argen_fit_intercept=self.is_fit_intercept,
                                                 cpu=8,
-                                                zero_thresh=1e-8,
-                                                is_soft_J=True)
+                                                zero_thresh=self.eps)
                     reg.bootstrapped_feature_select(X_train, y_train)
                     bootstrapped_reg_dict[(alpha, lam)] = reg
             self.bootstrapped_reg_dict = bootstrapped_reg_dict
@@ -201,14 +207,15 @@ class DriverIndexTrackSp500Aren:
         return s0, t0
 
     def bootstrapped_feature_select_fit_one_hyperparameter(self, reg: BootstrappedRegressor, X_train, y_train, X_val,
-                                                           y_val, is_soft_J):
-        if is_soft_J:
-            J = reg.J_soft
-        else:
-            J = reg.J
+                                                           y_val, bootstrap_replicates: Union[int, None],
+                                                           soft_J_percentage: float = None):
+
+        J = reg.J[bootstrap_replicates, soft_J_percentage]
         arls = self.get_reg(lam_1=0, lam_2=0, lower_bound=0,
                             upper_bound=np.inf, n_features=len(J))
-        reg.fit(X_train, y_train, regressor=arls, fit_intercept=False, is_soft_J=is_soft_J)
+        reg.fit(X_train, y_train, regressor=arls, fit_intercept=self.is_fit_intercept,
+                bootstrap_replicates=bootstrap_replicates,
+                soft_J_percentage=soft_J_percentage)
         if self.percent_money_on_each_stock < 1:
             coef_max = np.max(reg.coef_)
             coef_min = np.min(reg.coef_)
@@ -216,14 +223,18 @@ class DriverIndexTrackSp500Aren:
             # print(s0, t0)
             arls = self.get_reg(lam_1=0, lam_2=0, lower_bound=s0,
                                 upper_bound=t0, n_features=len(J))
-            reg.fit(X_train, y_train, regressor=arls, fit_intercept=False, is_soft_J=is_soft_J)
+            reg.fit(X_train, y_train, regressor=arls, fit_intercept=self.is_fit_intercept,
+                    bootstrap_replicates=bootstrap_replicates,
+                    soft_J_percentage=soft_J_percentage)
         # mse = reg.score(X=X_val, y=y_val)
         portfolio_return = self.get_portfolio_return(J=J, coef_=reg.coef_, X_test=X_val)
         te = self.get_daily_tracking_error(portfolio_return=portfolio_return,
                                            index_return=y_val)
         return te
 
-    def bootstrapped_feature_select_best_hyperparameter(self, X_train, y_train, X_val, y_val, is_soft_J):
+    def bootstrapped_feature_select_best_hyperparameter(self, X_train, y_train, X_val, y_val,
+                                                        bootstrap_replicates: Union[int, None],
+                                                        soft_J_percentage: float = None):
         if self.bootstrapped_reg_dict is None:
             raise ValueError('Need to run bootstrapped_feature_select_hyperparameters')
         alpha_list = self.get_alpha_list
@@ -236,19 +247,18 @@ class DriverIndexTrackSp500Aren:
             lam_list = self.get_lam_list(alpha)
             for lam in lam_list:
                 reg = self.bootstrapped_reg_dict[(alpha, lam)]
-                if is_soft_J:
-                    J = reg.J_soft
-                else:
-                    J = reg.J
-                if not J:  # is J is empty, skip it
+                J = reg.J[bootstrap_replicates, soft_J_percentage]
+                if not J:  # if J is empty, skip it
                     continue
                 if self.max_feature_selected is not None:
                     if self.max_feature_selected <= len(J):
                         continue
                 try:
-                    mse = self.bootstrapped_feature_select_fit_one_hyperparameter(reg=reg, X_train=X_train, y_train=y_train,
-                                                                              X_val=X_val, y_val=y_val,
-                                                                              is_soft_J=is_soft_J)
+                    mse = self.bootstrapped_feature_select_fit_one_hyperparameter(reg=reg, X_train=X_train,
+                                                                                  y_train=y_train,
+                                                                                  X_val=X_val, y_val=y_val,
+                                                                                  bootstrap_replicates=bootstrap_replicates,
+                                                                                  soft_J_percentage=soft_J_percentage)
                 except:
                     continue
                 # print(f"alpha={alpha}, lam={lam}, te={mse}, subset={len(J)}")
@@ -279,16 +289,17 @@ class DriverIndexTrackSp500Aren:
         plt.plot(range(nreal, npred + nreal), price_pred[nreal:nreal + npred], 'r--', linewidth=0.7)
         plt.show()
 
-    def run(self, is_soft_J, is_plot_price):
+    def run_once(self, bootstrap_replicates: Union[int, None],
+                 soft_J_percentage: float = None, is_plot_price: bool = False):
         X_train, y_train, X_val, y_val, X_test, y_test = self.train_test_val_split
         self.bootstrapped_feature_select_all_hyperparameters(X_train, y_train)
-        self.bootstrapped_feature_select_best_hyperparameter(X_train, y_train, X_val, y_val, is_soft_J=is_soft_J)
+        self.bootstrapped_feature_select_best_hyperparameter(X_train, y_train, X_val, y_val,
+                                                             bootstrap_replicates=bootstrap_replicates,
+                                                             soft_J_percentage=soft_J_percentage)
         # print(f"min_coef={np.min(self.val_reg.coef_)}, max_coef={np.max(self.val_reg.coef_)}")
-        mse = self.val_reg.score(X=X_test, y=y_test, is_soft_J=is_soft_J)
-        if is_soft_J:
-            J = self.val_reg.J_soft
-        else:
-            J = self.val_reg.J
+        mse = self.val_reg.score(X=X_test, y=y_test, bootstrap_replicates=bootstrap_replicates,
+                                 soft_J_percentage=soft_J_percentage)
+        J = self.val_reg.J[bootstrap_replicates, soft_J_percentage]
         size_J = len(J)
         portfolio_return = self.get_portfolio_return(J=J,
                                                      coef_=self.val_reg.coef_, X_test=X_test)
@@ -297,154 +308,33 @@ class DriverIndexTrackSp500Aren:
             self.plot_price(J=J, X_train=X_train, X_val=X_val, X_test=X_test)
         return size_J, mse, daily_tracking_error
 
-    # def load_saved_date_fix_alpha(self, alpha):
-    #     data_dir_path = pathlib.Path(__file__).parent / '../data'
-    #     filename = data_dir_path / f'bodict_{alpha}alpha_{self.n_lambdas}lams_{self.n_alphas}alphas_{self.start_date}_{self.end_date}_train{self.train_size}_val{self.val_size}_test{self.test_size}_low{self.fit_low_bound}_up{self.fit_up_bound}_max{self.max_feature_selected}.pickle'
-    #     file_path = pathlib.Path(filename)
-    #     if not file_path.exists():
-    #         print('file does not exist')
-    #         X_train, y_train, X_val, y_val, X_test, y_test = self.train_test_val_split
-    #         bootstrap_replicates_list = ['None', 8, 16, 32, 64, 128]
-    #         result_dict = {}
-    #         for bootstrap_replicates in tqdm(bootstrap_replicates_list):
-    #             data_dir_path = pathlib.Path(__file__).parent / '../data'
-    #             sourcename = data_dir_path / f'bodict_borepli{bootstrap_replicates}_{self.n_lambdas}lams_{self.n_alphas}alphas_{self.start_date}_{self.end_date}_train{self.train_size}_val{self.val_size}_test{self.test_size}.pickle'
-    #             file_path = pathlib.Path(sourcename)
-    #             if not file_path.exists():
-    #                 raise ValueError(f'{sourcename} does not exist...')
-    #             else:
-    #                 print('file exists and load...')
-    #                 with open(sourcename, 'rb') as handle:
-    #                     bootstrapped_reg_dict = pickle.load(handle)
-    #                 result_dict[bootstrap_replicates] = {}
-    #                 dict_keys = list(bootstrapped_reg_dict.keys())
-    #                 lam_list = [x[1] for x in dict_keys if x[0] == alpha]
-    #                 result_dict[bootstrap_replicates]['lam_list'] = lam_list
-    #                 mse_list = []
-    #                 J_list = []
-    #                 for lam in tqdm(lam_list):
-    #                     reg = bootstrapped_reg_dict[(alpha, lam)]
-    #                     J_list.append(reg.J)
-    #                     mse = self.bootstrapped_feature_select_fit_one_hyperparameter(reg=reg, X_train=X_train,
-    #                                                                                   y_train=y_train,
-    #                                                                                   X_val=X_val, y_val=y_val)
-    #                     mse_list.append(mse)
-    #                 result_dict[bootstrap_replicates]['mse_list'] = mse_list
-    #                 result_dict[bootstrap_replicates]['J_list'] = J_list
-    #         with open(filename, 'wb') as handle:
-    #             pickle.dump(result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    #     else:
-    #         print('file exists and load...')
-    #         with open(filename, 'rb') as handle:
-    #             result_dict = pickle.load(handle)
-    #     return result_dict
-    #
-    # def plot_saved_data_fixed_alpha(self, alpha):
-    #     result_dict = self.load_saved_date_fix_alpha(alpha=alpha)
-    #     for bootstrap_replicates in result_dict:
-    #         x = np.log(result_dict[bootstrap_replicates]['lam_list'])
-    #         y = result_dict[bootstrap_replicates]['mse_list']
-    #         plt.plot(x, y, label=f'm={bootstrap_replicates}', linewidth=0.8)
-    #     plt.legend()
-    #     plt.xlabel(f'$\\ln\\lambda, \\alpha={alpha}$')
-    #     plt.ylabel('Tracking error')
-    #     plt.show()
-    #
-    #     for bootstrap_replicates in result_dict:
-    #         J_list = result_dict[bootstrap_replicates]['J_list']
-    #         x = np.log(result_dict[bootstrap_replicates]['lam_list'])
-    #         y = [len(item) for item in J_list]
-    #         plt.plot(x, y, label=f'm={bootstrap_replicates}', linewidth=0.8)
-    #     plt.legend()
-    #     plt.xlabel(f'$\\ln\\lambda, \\alpha={alpha}$')
-    #     plt.ylabel('Number of selected stocks')
-    #     plt.show()
-    #
-    #     for bootstrap_replicates in result_dict:
-    #         J_list = result_dict[bootstrap_replicates]['J_list']
-    #         te_list = result_dict[bootstrap_replicates]['mse_list']
-    #         x = np.log(result_dict[bootstrap_replicates]['lam_list'])
-    #         y = [len(J_list[i]) * te_list[i] for i in range(len(J_list))]
-    #         plt.plot(x, y, label=f'm={bootstrap_replicates}', linewidth=0.8)
-    #     plt.legend()
-    #     plt.xlabel(f'$\\ln\\lambda, \\alpha={alpha}$')
-    #     plt.ylabel('Number of selected stocks times tracking error')
-    #     plt.show()
-    #
-    # @property
-    # def load_saved_date_best_J(self):
-    #     data_dir_path = pathlib.Path(__file__).parent / '../data'
-    #     filename = data_dir_path / f'bodict_bestJ_{self.n_lambdas}lams_{self.n_alphas}alphas_{self.start_date}_{self.end_date}_train{self.train_size}_val{self.val_size}_test{self.test_size}_low{self.fit_low_bound}_up{self.fit_up_bound}_max{self.max_feature_selected}.pickle'
-    #     file_path = pathlib.Path(filename)
-    #     if not file_path.exists():
-    #         print('file does not exist')
-    #         X_train, y_train, X_val, y_val, X_test, y_test = self.train_test_val_split
-    #         bootstrap_replicates_list = ['None', 8, 16, 32, 64, 128]
-    #         result_dict = {}
-    #         for bootstrap_replicates in tqdm(bootstrap_replicates_list):
-    #             data_dir_path = pathlib.Path(__file__).parent / '../data'
-    #             sourcename = data_dir_path / f'bodict_borepli{bootstrap_replicates}_{self.n_lambdas}lams_{self.n_alphas}alphas_{self.start_date}_{self.end_date}_train{self.train_size}_val{self.val_size}_test{self.test_size}.pickle'
-    #             file_path = pathlib.Path(sourcename)
-    #             if not file_path.exists():
-    #                 raise ValueError(f'{sourcename} does not exist...')
-    #             else:
-    #                 print('file exists and load...')
-    #                 with open(sourcename, 'rb') as handle:
-    #                     bootstrapped_reg_dict = pickle.load(handle)
-    #                 dict_keys = list(bootstrapped_reg_dict.keys())
-    #                 val_mse = np.inf
-    #                 val_reg = None
-    #                 for alpha, lam in dict_keys:
-    #                     reg = bootstrapped_reg_dict[(alpha, lam)]
-    #                     if self.max_feature_selected is not None:
-    #                         if self.max_feature_selected <= len(reg.J):
-    #                             continue
-    #                     mse = self.bootstrapped_feature_select_fit_one_hyperparameter(reg=reg, X_train=X_train,
-    #                                                                                   y_train=y_train,
-    #                                                                                   X_val=X_val, y_val=y_val)
-    #                     print(f"alpha={alpha}, lam=e^{math.log(lam)}, te={mse}, subset={len(reg.J)}")
-    #                     if mse < val_mse:
-    #                         val_mse = mse
-    #                         val_reg = reg
-    #                 result_dict[bootstrap_replicates] = val_reg.J
-    #         with open(filename, 'wb') as handle:
-    #             pickle.dump(result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    #     else:
-    #         print('file exists and load...')
-    #         with open(filename, 'rb') as handle:
-    #             result_dict = pickle.load(handle)
-    #     return result_dict
-    #
-    # def plot_saved_data_best_J(self):
-    #     bootstrap_replicates_list = ['None', 8, 16, 32, 64, 128]
-    #     result_dict = self.load_saved_date_best_J
-    #     J_map_list = np.zeros((self.n_features, len(bootstrap_replicates_list)))
-    #
-    #     for col in range(len(bootstrap_replicates_list)):
-    #         J = result_dict[bootstrap_replicates_list[col]]
-    #         for row in range(self.n_features):
-    #             if row in J:
-    #                 J_map_list[row, col] = 1
-    #     plt.imshow(J_map_list, cmap='hot', interpolation='nearest', aspect='auto')
-    #     plt.xlabel(f'm')
-    #     plt.ylabel('Stock index')
-    #     plt.show()
+    def run_all(self, bootstrap_replicates_lst=None, soft_J_percentage_lst=None):
+        if bootstrap_replicates_lst is None:
+            bootstrap_replicates_lst = self.bootstrap_replicates_lst
+        if soft_J_percentage_lst is None:
+            soft_J_percentage_lst=self.soft_J_percentage_lst
+        table_dict = {}
+        if None in bootstrap_replicates_lst:
+            table_dict['aren'] = {}
+            # no bootstrapping, so (bootstrap_replicates,soft_J_percentage) = (None,None)
+            size_J, mse, daily_tracking_error = self.run_once(bootstrap_replicates=None,
+                                                              soft_J_percentage=None, is_plot_price=False)
+            table_dict['aren']['te'] = round(daily_tracking_error*1e3,3)
+            table_dict['aren']['mse'] = round(mse*1e6,3)
+            table_dict['aren']['size'] = int(size_J)
+        bootstrap_replicates_lst_remove_none = [x for x in bootstrap_replicates_lst if x is not None]
+        if bootstrap_replicates_lst_remove_none:
+            for soft_J_percentage in soft_J_percentage_lst:
+                for bootstrap_replicates in bootstrap_replicates_lst_remove_none:
+                    key = 'boaren' + str(soft_J_percentage) + 'm' + str(bootstrap_replicates)
+                    table_dict[key] = {}
+                    size_J, mse, daily_tracking_error = self.run_once(bootstrap_replicates=bootstrap_replicates,
+                                                                      soft_J_percentage=soft_J_percentage,
+                                                                      is_plot_price=False)
+                    table_dict[key]['te'] = round(daily_tracking_error*1e3,3)
+                    table_dict[key]['mse'] = round(mse*1e6,3)
+                    table_dict[key]['size'] = int(size_J)
+        table_df = pd.DataFrame(table_dict, index=['te', 'mse', 'size'])
+        return table_df.to_latex(index=False)
 
 
-class DriverIndexTrackSp500Lasso(DriverIndexTrackSp500Aren):
-    def __init__(self, bootstrap_replicates, n_lambdas: int, start_date='2021-09-14',
-                 end_date='2021-09-16', train_size=0.7, val_size=0.2, test_size=0.1):
-        """
-        bootstrap_replicates: number of bootstrap replications, if None, do not apply bootstrapping
-
-        lambda * ||w||_1
-
-        lambda = e^
-        """
-        super().__init__(bootstrap_replicates=bootstrap_replicates, n_lambdas=n_lambdas, n_alphas=1,
-                         start_date=start_date, end_date=end_date, train_size=train_size, val_size=val_size,
-                         test_size=test_size)
-
-    def get_reg(self, lam_1, lam_2, lower_bound, upper_bound, n_features):
-        lasso = linear_model.Lasso(alpha=lam_1, fit_intercept=False)
-        return lasso
