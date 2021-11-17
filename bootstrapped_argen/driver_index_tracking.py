@@ -128,10 +128,10 @@ class DriverIndexTrackSp500Aren:
     # alpha=0.1, lam = 0.9,0.89,0.88,0.87,0.86:0;  0.8,0.85,1; 0.75:3; 0.5: 30; 0.4:50; 0.2:88; 0.1:186;0.09:191; 0.01:289; 0.001:295
 
     @staticmethod
-    def get_portfolio_return(J, coef_, X_test):
+    def get_portfolio_return(J, coef_, intercept_, X_test):
         X_test = X_test.iloc[:, J]
         # coef_ = coef_ / sum(coef_)
-        portfolio_return = np.matmul(X_test, coef_)
+        portfolio_return = np.matmul(X_test, coef_) + intercept_
         return portfolio_return
 
     @staticmethod
@@ -227,7 +227,7 @@ class DriverIndexTrackSp500Aren:
                     bootstrap_replicates=bootstrap_replicates,
                     soft_J_percentage=soft_J_percentage)
         # mse = reg.score(X=X_val, y=y_val)
-        portfolio_return = self.get_portfolio_return(J=J, coef_=reg.coef_, X_test=X_val)
+        portfolio_return = self.get_portfolio_return(J=J, coef_=reg.coef_, intercept_=reg.intercept_, X_test=X_val)
         te = self.get_daily_tracking_error(portfolio_return=portfolio_return,
                                            index_return=y_val)
         return te
@@ -243,7 +243,7 @@ class DriverIndexTrackSp500Aren:
         val_reg = None
         val_lam = None
         val_alpha = None
-        for alpha in tqdm(alpha_list):
+        for alpha in alpha_list:
             lam_list = self.get_lam_list(alpha)
             for lam in lam_list:
                 reg = self.bootstrapped_reg_dict[(alpha, lam)]
@@ -275,11 +275,15 @@ class DriverIndexTrackSp500Aren:
 
     def plot_price(self, J, X_train, X_val, X_test):
         train_return_pred = self.get_portfolio_return(J=J,
-                                                      coef_=self.val_reg.coef_, X_test=X_train)
+                                                      coef_=self.val_reg.coef_,
+                                                      intercept_=self.val_reg.intercept_,
+                                                      X_test=X_train)
         val_return_pred = self.get_portfolio_return(J=J,
-                                                    coef_=self.val_reg.coef_, X_test=X_val)
+                                                    coef_=self.val_reg.coef_,
+                                                    intercept_=self.val_reg.intercept_, X_test=X_val)
         test_return_pred = self.get_portfolio_return(J=J,
-                                                     coef_=self.val_reg.coef_, X_test=X_test)
+                                                     coef_=self.val_reg.coef_,
+                                                     intercept_=self.val_reg.intercept_, X_test=X_test)
         return_pred = np.concatenate((train_return_pred, val_return_pred, test_return_pred))
         price_pred = np.concatenate(([self.y_price[0]], (return_pred + 1) * self.y_price[:-1]))
         nreal = len(train_return_pred) + 1
@@ -289,10 +293,10 @@ class DriverIndexTrackSp500Aren:
         plt.plot(range(nreal, npred + nreal), price_pred[nreal:nreal + npred], 'r--', linewidth=0.7)
         plt.show()
 
-    def run_once(self, bootstrap_replicates: Union[int, None],
-                 soft_J_percentage: float = None, is_plot_price: bool = False):
-        X_train, y_train, X_val, y_val, X_test, y_test = self.train_test_val_split
-        self.bootstrapped_feature_select_all_hyperparameters(X_train, y_train)
+    def _run_once(self, X_train, y_train, X_val, y_val, X_test, y_test, bootstrap_replicates: Union[int, None],
+                  soft_J_percentage: float = None, is_plot_price: bool = False):
+        # X_train, y_train, X_val, y_val, X_test, y_test = self.train_test_val_split
+        # self.bootstrapped_feature_select_all_hyperparameters(X_train, y_train)
         self.bootstrapped_feature_select_best_hyperparameter(X_train, y_train, X_val, y_val,
                                                              bootstrap_replicates=bootstrap_replicates,
                                                              soft_J_percentage=soft_J_percentage)
@@ -302,39 +306,52 @@ class DriverIndexTrackSp500Aren:
         J = self.val_reg.J[bootstrap_replicates, soft_J_percentage]
         size_J = len(J)
         portfolio_return = self.get_portfolio_return(J=J,
-                                                     coef_=self.val_reg.coef_, X_test=X_test)
+                                                     coef_=self.val_reg.coef_, intercept_=self.val_reg.intercept_,
+                                                     X_test=X_test)
         daily_tracking_error = self.get_daily_tracking_error(portfolio_return=portfolio_return, index_return=y_test)
         if is_plot_price:
             self.plot_price(J=J, X_train=X_train, X_val=X_val, X_test=X_test)
         return size_J, mse, daily_tracking_error
 
+    def run_once(self, bootstrap_replicates: Union[int, None],
+                 soft_J_percentage: float = None, is_plot_price: bool = False):
+        X_train, y_train, X_val, y_val, X_test, y_test = self.train_test_val_split
+        self.bootstrapped_feature_select_all_hyperparameters(X_train, y_train)
+        size_J, mse, daily_tracking_error = self._run_once(X_train, y_train, X_val, y_val, X_test, y_test,
+                                                           bootstrap_replicates=bootstrap_replicates,
+                                                           soft_J_percentage=soft_J_percentage,
+                                                           is_plot_price=is_plot_price)
+        return size_J, mse, daily_tracking_error
+
     def run_all(self, bootstrap_replicates_lst=None, soft_J_percentage_lst=None):
+        X_train, y_train, X_val, y_val, X_test, y_test = self.train_test_val_split
+        self.bootstrapped_feature_select_all_hyperparameters(X_train, y_train)
         if bootstrap_replicates_lst is None:
             bootstrap_replicates_lst = self.bootstrap_replicates_lst
         if soft_J_percentage_lst is None:
-            soft_J_percentage_lst=self.soft_J_percentage_lst
+            soft_J_percentage_lst = self.soft_J_percentage_lst
         table_dict = {}
         if None in bootstrap_replicates_lst:
             table_dict['aren'] = {}
             # no bootstrapping, so (bootstrap_replicates,soft_J_percentage) = (None,None)
-            size_J, mse, daily_tracking_error = self.run_once(bootstrap_replicates=None,
-                                                              soft_J_percentage=None, is_plot_price=False)
-            table_dict['aren']['te'] = round(daily_tracking_error*1e3,3)
-            table_dict['aren']['mse'] = round(mse*1e6,3)
+            size_J, mse, daily_tracking_error = self._run_once(X_train, y_train, X_val, y_val, X_test, y_test,
+                                                               bootstrap_replicates=None,
+                                                               soft_J_percentage=None, is_plot_price=False)
+            table_dict['aren']['te'] = round(daily_tracking_error * 1e3, 3)
+            table_dict['aren']['mse'] = round(mse * 1e6, 3)
             table_dict['aren']['size'] = int(size_J)
         bootstrap_replicates_lst_remove_none = [x for x in bootstrap_replicates_lst if x is not None]
         if bootstrap_replicates_lst_remove_none:
-            for soft_J_percentage in soft_J_percentage_lst:
+            for soft_J_percentage in tqdm(soft_J_percentage_lst):
                 for bootstrap_replicates in bootstrap_replicates_lst_remove_none:
                     key = 'boaren' + str(soft_J_percentage) + 'm' + str(bootstrap_replicates)
                     table_dict[key] = {}
-                    size_J, mse, daily_tracking_error = self.run_once(bootstrap_replicates=bootstrap_replicates,
-                                                                      soft_J_percentage=soft_J_percentage,
-                                                                      is_plot_price=False)
-                    table_dict[key]['te'] = round(daily_tracking_error*1e3,3)
-                    table_dict[key]['mse'] = round(mse*1e6,3)
+                    size_J, mse, daily_tracking_error = self._run_once(X_train, y_train, X_val, y_val, X_test, y_test,
+                                                                       bootstrap_replicates=bootstrap_replicates,
+                                                                       soft_J_percentage=soft_J_percentage,
+                                                                       is_plot_price=False)
+                    table_dict[key]['te'] = round(daily_tracking_error * 1e3, 3)
+                    table_dict[key]['mse'] = round(mse * 1e6, 3)
                     table_dict[key]['size'] = int(size_J)
         table_df = pd.DataFrame(table_dict, index=['te', 'mse', 'size'])
-        return table_df.to_latex(index=False)
-
-
+        return table_df, table_df.to_latex(index=False)
