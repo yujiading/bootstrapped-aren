@@ -26,13 +26,22 @@ class DriverIndexTrackSp500Aren:
                  val_size=0.2,
                  test_size=0.1,
                  eps=1e-8,
-                 is_fit_intercept: bool = False):
+                 is_fit_intercept: bool = False,
+                 is_center_data: bool = True):
         """
         bootstrap_replicates_lst: list of bootstrap replicates, None in list means do not apply bootstrapping
 
+
         lambda * (alpha * ||w||_1 + 0.5 * (1-alpha) * ||w||_2^2)
 
-        lambda = e^, 0<=alpha<=1
+        0<=alpha<=1
+
+        if is_fit_intercept is True and is_center_data is False:
+            fit with intercept, but penalize intercept, not accurate, see The Elements of Statistical Learning page 64
+        if is_fit_intercept is False and is_center_data is False:
+            fit without intercept
+        if is_fit_intercept is False and is_center_data is True:
+            fit with intercept, best option
         """
         self.bootstrap_replicates_lst = bootstrap_replicates_lst
         self.n_lambdas = n_lambdas
@@ -47,10 +56,13 @@ class DriverIndexTrackSp500Aren:
         self.max_feature_selected = max_feature_selected
         self.eps = eps
         self.is_fit_intercept = is_fit_intercept
+        self.is_center_data = is_center_data
         self.n_samples = None
         self.n_features = None
         self.X = None  # returns
         self.y = None  # returns
+        self.X_train_mean = None
+        self.y_train_mean = None
         self.y_price = None
         self.val_reg = None
         self.val_mse = None
@@ -93,6 +105,15 @@ class DriverIndexTrackSp500Aren:
         y_val = self.y.iloc[n_samples_train:n_samples_train + n_samples_val]
         X_test = self.X.iloc[n_samples_train + n_samples_val:, :]
         y_test = self.y.iloc[n_samples_train + n_samples_val:]
+        if self.is_center_data:
+            self.X_train_mean = X_train.mean()
+            self.y_train_mean = y_train.mean()
+            X_train = X_train - self.X_train_mean
+            X_val = X_val - self.X_train_mean
+            X_test = X_test - self.X_train_mean
+            y_train = y_train - self.y_train_mean
+            y_val = y_val - self.y_train_mean
+            y_test = y_test - self.y_train_mean
         return X_train, y_train, X_val, y_val, X_test, y_test
 
     def get_reg(self, lam_1, lam_2, lower_bound: Union[float, np.ndarray], upper_bound: Union[float, np.ndarray],
@@ -158,7 +179,7 @@ class DriverIndexTrackSp500Aren:
 
     def bootstrapped_feature_select_all_hyperparameters(self, X_train, y_train):
         data_dir_path = pathlib.Path(__file__).parent / '../data'
-        filename = data_dir_path / f'intercept{self.is_fit_intercept}_borepli{self.bootstrap_replicates_lst}_{self.n_lambdas}lams_{self.n_alphas}alphas_{self.start_date}_{self.end_date}_train{self.train_size}_val{self.val_size}_test{self.test_size}.pickle'
+        filename = data_dir_path / f'intercept{self.is_fit_intercept}_center{self.is_center_data}_borepli{self.bootstrap_replicates_lst}_{self.n_lambdas}lams_{self.n_alphas}alphas_{self.start_date}_{self.end_date}_train{self.train_size}_val{self.val_size}_test{self.test_size}.pickle'
         file_path = pathlib.Path(filename)
         if not file_path.exists():
             print('file does not exist')
@@ -284,6 +305,10 @@ class DriverIndexTrackSp500Aren:
         test_return_pred = self.get_portfolio_return(J=J,
                                                      coef_=self.val_reg.coef_,
                                                      intercept_=self.val_reg.intercept_, X_test=X_test)
+        if self.is_center_data:
+            train_return_pred = train_return_pred + self.y_train_mean
+            val_return_pred = val_return_pred + self.y_train_mean
+            test_return_pred = test_return_pred + self.y_train_mean
         return_pred = np.concatenate((train_return_pred, val_return_pred, test_return_pred))
         price_pred = np.concatenate(([self.y_price[0]], (return_pred + 1) * self.y_price[:-1]))
         nreal = len(train_return_pred) + 1
@@ -295,8 +320,6 @@ class DriverIndexTrackSp500Aren:
 
     def _run_once(self, X_train, y_train, X_val, y_val, X_test, y_test, bootstrap_replicates: Union[int, None],
                   soft_J_percentage: float = None, is_plot_price: bool = False):
-        # X_train, y_train, X_val, y_val, X_test, y_test = self.train_test_val_split
-        # self.bootstrapped_feature_select_all_hyperparameters(X_train, y_train)
         self.bootstrapped_feature_select_best_hyperparameter(X_train, y_train, X_val, y_val,
                                                              bootstrap_replicates=bootstrap_replicates,
                                                              soft_J_percentage=soft_J_percentage)

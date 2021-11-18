@@ -6,14 +6,20 @@ from bootstrapped_argen.driver_index_tracking import DriverIndexTrackSp500Aren
 def test_driver_index_track_sp500_aren_saving_data():
     driver = DriverIndexTrackSp500Aren(bootstrap_replicates_lst=[None, 8, 16, 32, 64, 128],  # increase
                                        soft_J_percentage_lst=[1, 0.9, 0.8, 0.7, 0.6],  # None if no bootstrap # decrease
-                                       is_fit_intercept=True,
-                                       # above settings are for saving and loading data
+                                       is_fit_intercept=False,
+                                       is_center_data=True,
+                                       # if is_fit_intercept is True and is_center_data is False:
+                                       #     fit with intercept, but penalize intercept, not accurate, see The Elements
+                                       #     of Statistical Learning page 64
+                                       # if is_fit_intercept is False and is_center_data is False:
+                                       #     fit without intercept
+                                       # if is_fit_intercept is False and is_center_data is True:
+                                       #     fit with intercept, best option
                                        # please change only above
-                                       # do not need to change below
+                                       # do not change below
                                        percent_money_on_each_stock=1,  # if 100%, no limit on constraints
                                        max_feature_selected=None,
-                                       # please change only above
-                                       # do not need to change below
+                                       # do not change below
                                        n_alphas=10,  # from 0 to 1
                                        n_lambdas=100,  # from 0.001*max_lam to max_lam
                                        start_date='2020-09-01',
@@ -26,7 +32,6 @@ def test_driver_index_track_sp500_aren_saving_data():
 
 
 def test_driver_index_track_sp500_aren_exportung_results():
-    is_fit_intercept = True  # True or False
     # percent_money_on_each_stock = 0.1  # M = 1, 0.3, 0.2, 0.1 # if 100%, no limit on constraints
     # max_feature_selected = None  # None, 200, 150, 100, 50
 
@@ -34,14 +39,14 @@ def test_driver_index_track_sp500_aren_exportung_results():
         for percent_money_on_each_stock in [1, 0.3, 0.2, 0.1]:
             driver = DriverIndexTrackSp500Aren(bootstrap_replicates_lst=[None, 8, 16, 32, 64, 128],
                                                soft_J_percentage_lst=[1, 0.9, 0.8, 0.7, 0.6],
-                                               # None if no bootstrap # decrease
+                                               is_fit_intercept=False,
+                                               is_center_data=True,
                                                # do not change above
                                                # change below to export results
-                                               is_fit_intercept=is_fit_intercept,
                                                percent_money_on_each_stock=percent_money_on_each_stock,
                                                max_feature_selected=max_feature_selected,
                                                # please change only above
-                                               # do not need to change below
+                                               # do not change below
                                                n_alphas=10,  # from 0 to 1
                                                n_lambdas=100,  # from 0.001*max_lam to max_lam
                                                start_date='2020-09-01',
@@ -52,13 +57,14 @@ def test_driver_index_track_sp500_aren_exportung_results():
 
             table, latex = driver.run_all()
             data_dir_path = pathlib.Path(__file__).parent / '../data'
-            filename = data_dir_path / f'out_intercept{is_fit_intercept}_M{percent_money_on_each_stock}_max{max_feature_selected}.csv'
+            filename = data_dir_path / f'out_intercept{driver.is_fit_intercept}_center{driver.is_center_data}_M{percent_money_on_each_stock}_max{max_feature_selected}.csv'
             file_path = pathlib.Path(filename)
             table.to_csv(file_path)
 
 
 def test_driver_index_track_sp500_aren_plot():
     is_fit_intercept = False  # True or False
+    is_center_data = True  # True or False
     percent_money_on_each_stock = 0.3  # M = 1, 0.3, 0.2, 0.1 # if 100%, no limit on constraints
     max_feature_selected = None  # None, 200, 150, 100, 50
     bootstrap_replicates = 32  # None, 8, 16, 32, 64, 128
@@ -68,6 +74,7 @@ def test_driver_index_track_sp500_aren_plot():
                                        # do not change above
                                        # change below to export results
                                        is_fit_intercept=is_fit_intercept,
+                                       is_center_data=is_center_data,
                                        percent_money_on_each_stock=percent_money_on_each_stock,
                                        max_feature_selected=max_feature_selected,
                                        # please change only above
