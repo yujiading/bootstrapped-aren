@@ -67,7 +67,7 @@ def test_driver_index_track_sp500_aren_plot():
     is_center_data = True  # True or False
     percent_money_on_each_stock = 0.3  # M = 1, 0.3, 0.2, 0.1 # if 100%, no limit on constraints
     max_feature_selected = None  # None, 200, 150, 100, 50
-    bootstrap_replicates = 32  # None, 8, 16, 32, 64, 128
+    bootstrap_replicates = 16  # None, 8, 16, 32, 64, 128
     soft_J_percentage = 0.8  # 1, 0.9, 0.8, 0.7, 0.6
     driver = DriverIndexTrackSp500Aren(bootstrap_replicates_lst=[None, 8, 16, 32, 64, 128],  # # increaing list
                                        soft_J_percentage_lst=[1, 0.9, 0.8, 0.7, 0.6],  # None if no bootstrap # decrease
