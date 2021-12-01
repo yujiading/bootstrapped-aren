@@ -1,11 +1,18 @@
 import pathlib
+from dataclasses import dataclass
+from typing import Union
+
+import matplotlib.pyplot as plt
+import pandas as pd
+from tqdm import tqdm
 
 from bootstrapped_argen.driver_index_tracking import DriverIndexTrackSp500Aren
 
 
 def test_driver_index_track_sp500_aren_saving_data():
-    driver = DriverIndexTrackSp500Aren(bootstrap_replicates_lst=[None, 8, 16, 32, 64, 128],  # increase
-                                       soft_J_percentage_lst=[1, 0.9, 0.8, 0.7, 0.6],  # None if no bootstrap # decrease
+    driver = DriverIndexTrackSp500Aren(bootstrap_replicates_lst=[None, 8, 16, 32, 64, 128, 256],  # increase
+                                       soft_J_percentage_lst=[1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.6],
+                                       # None if no bootstrap # decrease
                                        is_fit_intercept=False,
                                        is_center_data=True,
                                        # if is_fit_intercept is True and is_center_data is False:
@@ -34,11 +41,14 @@ def test_driver_index_track_sp500_aren_saving_data():
 def test_driver_index_track_sp500_aren_exportung_results():
     # percent_money_on_each_stock = 0.1  # M = 1, 0.3, 0.2, 0.1 # if 100%, no limit on constraints
     # max_feature_selected = None  # None, 200, 150, 100, 50
-
+    data_dir_path = pathlib.Path(__file__).parent / '../data'
     for max_feature_selected in [None, 200, 150, 100, 50]:
+        filename = data_dir_path / f'out_max{max_feature_selected}.csv'
+        file_path = pathlib.Path(filename)
+        table_all = pd.DataFrame()
         for percent_money_on_each_stock in [1, 0.3, 0.2, 0.1]:
-            driver = DriverIndexTrackSp500Aren(bootstrap_replicates_lst=[None, 8, 16, 32, 64, 128],
-                                               soft_J_percentage_lst=[1, 0.9, 0.8, 0.7, 0.6],
+            driver = DriverIndexTrackSp500Aren(bootstrap_replicates_lst=[None, 8, 16, 32, 64, 128, 256],
+                                               soft_J_percentage_lst=[1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.6],
                                                is_fit_intercept=False,
                                                is_center_data=True,
                                                # do not change above
@@ -56,21 +66,20 @@ def test_driver_index_track_sp500_aren_exportung_results():
                                                test_size=0.1)
 
             table, latex = driver.run_all()
-            data_dir_path = pathlib.Path(__file__).parent / '../data'
-            filename = data_dir_path / f'out_intercept{driver.is_fit_intercept}_center{driver.is_center_data}_M{percent_money_on_each_stock}_max{max_feature_selected}.csv'
-            file_path = pathlib.Path(filename)
-            table.to_csv(file_path)
+            table_all = table_all.append(table)
+        table_all.to_csv(file_path)
 
 
-def test_driver_index_track_sp500_aren_plot():
+def test_driver_index_track_sp500_aren_plot_one():
     is_fit_intercept = False  # True or False
     is_center_data = True  # True or False
     percent_money_on_each_stock = 0.3  # M = 1, 0.3, 0.2, 0.1 # if 100%, no limit on constraints
     max_feature_selected = None  # None, 200, 150, 100, 50
     bootstrap_replicates = 16  # None, 8, 16, 32, 64, 128
     soft_J_percentage = 0.8  # 1, 0.9, 0.8, 0.7, 0.6
-    driver = DriverIndexTrackSp500Aren(bootstrap_replicates_lst=[None, 8, 16, 32, 64, 128],  # # increaing list
-                                       soft_J_percentage_lst=[1, 0.9, 0.8, 0.7, 0.6],  # None if no bootstrap # decrease
+    driver = DriverIndexTrackSp500Aren(bootstrap_replicates_lst=[None, 8, 16, 32, 64, 128, 256],  # # increaing list
+                                       soft_J_percentage_lst=[1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.6],
+                                       # None if no bootstrap # decrease
                                        # do not change above
                                        # change below to export results
                                        is_fit_intercept=is_fit_intercept,
@@ -89,3 +98,75 @@ def test_driver_index_track_sp500_aren_plot():
 
     _, _, _ = driver.run_once(bootstrap_replicates=bootstrap_replicates, soft_J_percentage=soft_J_percentage,
                               is_plot_price=True)
+
+
+@dataclass
+class BestPara:
+    Stocks: Union[None, int]
+    M: float
+    m: int
+    S: float
+
+
+def test_driver_index_track_sp500_aren_plot_many():
+    parameters = [
+        BestPara(Stocks=None, M=1, m=64, S=0.95),
+        BestPara(Stocks=None, M=0.3, m=32, S=0.75),
+        BestPara(Stocks=None, M=0.2, m=64, S=0.75),
+        BestPara(Stocks=None, M=0.1, m=32, S=0.9),
+        BestPara(Stocks=200, M=1, m=128, S=0.9),
+        BestPara(Stocks=200, M=0.3, m=32, S=0.95),
+        BestPara(Stocks=200, M=0.2, m=32, S=0.95),
+        BestPara(Stocks=200, M=0.1, m=32, S=0.9),
+        BestPara(Stocks=150, M=1, m=64, S=1),
+        BestPara(Stocks=150, M=0.3, m=64, S=1),
+        BestPara(Stocks=150, M=0.2, m=32, S=0.85),
+        BestPara(Stocks=150, M=0.1, m=32, S=0.9),
+        BestPara(Stocks=100, M=1, m=64, S=0.8),
+        BestPara(Stocks=100, M=0.3, m=64, S=0.8),
+        BestPara(Stocks=100, M=0.2, m=32, S=0.95),
+        BestPara(Stocks=100, M=0.1, m=256, S=1),
+    ]
+    fig = plt.figure()
+    i = 1
+    for parameter in tqdm(parameters):
+        is_fit_intercept = False  # True or False
+        is_center_data = True  # True or False
+        percent_money_on_each_stock = parameter.M  # M = 1, 0.3, 0.2, 0.1 # if 100%, no limit on constraints
+        max_feature_selected = parameter.Stocks  # None, 200, 150, 100, 50
+        bootstrap_replicates = parameter.m  # None, 8, 16, 32, 64, 128
+        soft_J_percentage = parameter.S  # 1, 0.9, 0.8, 0.7, 0.6
+        driver = DriverIndexTrackSp500Aren(bootstrap_replicates_lst=[None, 8, 16, 32, 64, 128, 256],  # # increaing list
+                                           soft_J_percentage_lst=[1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.6],
+                                           # None if no bootstrap # decrease
+                                           # do not change above
+                                           # change below to export results
+                                           is_fit_intercept=is_fit_intercept,
+                                           is_center_data=is_center_data,
+                                           percent_money_on_each_stock=percent_money_on_each_stock,
+                                           max_feature_selected=max_feature_selected,
+                                           # please change only above
+                                           # do not need to change below
+                                           n_alphas=10,  # from 0 to 1
+                                           n_lambdas=100,  # from 0.001*max_lam to max_lam
+                                           start_date='2020-09-01',
+                                           end_date='2021-09-01',
+                                           train_size=0.7,
+                                           val_size=0.2,
+                                           test_size=0.1)
+        plt.subplot(4, 4, i)
+        _, _, _ = driver.run_once(bootstrap_replicates=bootstrap_replicates, soft_J_percentage=soft_J_percentage,
+                                  is_plot_price=True)
+        # plt.title(f"Stocks<={max_feature_selected}, M={percent_money_on_each_stock}")
+        if i == 1:
+            plt.ylabel(f"No limit")
+        if i in [5, 9, 13]:
+            plt.ylabel(f"Stocks≤{max_feature_selected}")
+        if i in [13, 14, 15, 16]:
+            plt.xlabel(f"M={percent_money_on_each_stock}")
+        if i not in [1, 5, 9, 13]:
+            plt.yticks([])
+        plt.xticks([])
+        i += 1
+    plt.tight_layout()
+    plt.show()
