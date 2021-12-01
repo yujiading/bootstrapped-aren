@@ -313,10 +313,11 @@ class DriverIndexTrackSp500Aren:
         price_pred = np.concatenate(([self.y_price[0]], (return_pred + 1) * self.y_price[:-1]))
         nreal = len(train_return_pred) + 1
         npred = len(test_return_pred) + len(val_return_pred)
-        plt.plot(range(nreal + npred), self.y_price, 'b--', linewidth=0.7)
-        plt.plot(range(nreal), price_pred[:nreal], 'g--', linewidth=0.7)
-        plt.plot(range(nreal, npred + nreal), price_pred[nreal:nreal + npred], 'r--', linewidth=0.7)
-        plt.show()
+        plt.plot(range(nreal + npred), self.y_price, 'b--', linewidth=0.5)
+        plt.plot(range(nreal), price_pred[:nreal], 'g--', linewidth=0.5)
+        # plt.plot(range(nreal, nreal + npred), self.y_price[nreal:nreal + npred], 'b--', linewidth=0.5)
+        plt.plot(range(nreal, npred + nreal), price_pred[nreal:nreal + npred], 'r--', linewidth=0.5)
+
 
     def _run_once(self, X_train, y_train, X_val, y_val, X_test, y_test, bootstrap_replicates: Union[int, None],
                   soft_J_percentage: float = None, is_plot_price: bool = False):
