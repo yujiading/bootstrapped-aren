@@ -132,13 +132,13 @@ def test_driver_index_track_sp500_aren_plot_many():
     else:
         with open(filename, 'rb') as handle:
             parameters_with_data = pickle.load(handle)
-
+    # plt.rcParams["figure.figsize"] = (7, 10)
     fig = plt.figure()
-    parameters_with_data = parameters_with_data[0:1] + parameters_with_data[-1:]
+    # parameters_with_data = parameters_with_data[0:4] #+ parameters_with_data[-1:]
     i = 1
     for parameter in tqdm(parameters_with_data):
         plt.subplot(4, 4, i)
-        # plt.subplot(1, 2, i)
+        # plt.subplot(1, 4, i)
         percent_money_on_each_stock = parameter.M
         max_feature_selected = parameter.Stocks
         is_plot_acc_over_pred = False
