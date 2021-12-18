@@ -7,8 +7,8 @@ import numpy as np
 from generalized_elastic_net import GeneralizedElasticNet
 from tqdm import tqdm
 
-from bootstrapped_argen.library.bootstrapped_regressor import BootstrappedRegressor
-from bootstrapped_argen.library.simulation import Simulation
+from bootstrapped_aren.library.bootstrapped_regressor import BootstrappedRegressor
+from bootstrapped_aren.library.simulation import Simulation
 
 
 class DriverSimulation:

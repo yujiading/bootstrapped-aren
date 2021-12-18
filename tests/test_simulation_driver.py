@@ -1,6 +1,6 @@
 import math
 
-from bootstrapped_argen.driver_simulation import DriverSimulation
+from bootstrapped_aren.driver_simulation import DriverSimulation
 
 
 def test_driver_simulation():

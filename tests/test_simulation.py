@@ -1,4 +1,4 @@
-from bootstrapped_argen.library.simulation import Simulation
+from bootstrapped_aren.library.simulation import Simulation
 
 
 def test_simulation():

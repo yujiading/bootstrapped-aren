@@ -9,7 +9,7 @@ import yfinance as yf
 from generalized_elastic_net import GeneralizedElasticNet
 from tqdm import tqdm
 
-from bootstrapped_argen.library.bootstrapped_regressor import BootstrappedRegressor
+from bootstrapped_aren.library.bootstrapped_regressor import BootstrappedRegressor
 
 
 @dataclass
