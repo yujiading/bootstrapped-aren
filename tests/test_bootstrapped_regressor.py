@@ -4,7 +4,7 @@ import pytest
 from generalized_elastic_net import GeneralizedElasticNet
 from sklearn.linear_model import LinearRegression
 
-from bootstrapped_argen.library.bootstrapped_regressor import BootstrappedRegressor
+from bootstrapped_aren.library.bootstrapped_regressor import BootstrappedRegressor
 
 
 @pytest.fixture

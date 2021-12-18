@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from tqdm import tqdm
 
-from bootstrapped_argen.driver_index_tracking import BestPara
-from bootstrapped_argen.driver_index_tracking import DriverIndexTrackSp500Aren
+from bootstrapped_aren.driver_index_tracking import BestPara
+from bootstrapped_aren.driver_index_tracking import DriverIndexTrackSp500Aren
 
 
 def test_driver_index_track_sp500_aren_saving_data():
