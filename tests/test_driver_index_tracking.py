@@ -132,7 +132,7 @@ def test_driver_index_track_sp500_aren_plot_many():
     else:
         with open(filename, 'rb') as handle:
             parameters_with_data = pickle.load(handle)
-    # plt.rcParams["figure.figsize"] = (7, 10)
+    plt.rcParams["figure.figsize"] = (8, 10)
     fig = plt.figure()
     # parameters_with_data = parameters_with_data[0:4] #+ parameters_with_data[-1:]
     i = 1
@@ -141,12 +141,13 @@ def test_driver_index_track_sp500_aren_plot_many():
         # plt.subplot(1, 4, i)
         percent_money_on_each_stock = parameter.M
         max_feature_selected = parameter.Stocks
-        is_plot_acc_over_pred = False
+        is_plot_acc_over_pred = True
         if is_plot_acc_over_pred:
             x_test, y_test_pred, y_test_real = parameter.Obj["bootstrap"]
             plt.plot(x_test, y_test_real / y_test_pred, 'r-', linewidth=0.5)
             x_test, y_test_pred, y_test_real = parameter.Obj["aren"]
             plt.plot(x_test, y_test_real / y_test_pred, 'b--', linewidth=0.5)
+            plt.ylim(0.987, 1.016)
         else:
             x_test, y_test_pred, y_test_real = parameter.Obj["bootstrap"]
             plt.plot(x_test, y_test_real, 'g:', linewidth=0.5)
